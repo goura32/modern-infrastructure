@@ -14,7 +14,7 @@ Ansible                  Ubuntu OS・package・Docker・設定
 Docker / Docker Compose  Python Web API + PostgreSQL
 ```
 
-最終的に、Gitへ保存したコードからこの構成をdestroy・再構築します。
+Gitへ保存したcommit済みコードから、同じ前提条件の上で新しい教材VMを再構築します。既存VMの更新・destroyには、その環境のOpenTofu stateが必要です。
 
 ## 対象環境
 
@@ -25,7 +25,7 @@ Docker / Docker Compose  Python Web API + PostgreSQL
 - VM: Ubuntu Server、2 vCPU、4 GiB RAM、25 GiB virtual disk
 - network: 既存のlibvirt `default` NAT network
 
-trainingホスト自身はOpenTofuの管理対象ではありません。教材用VMだけを作成・破棄します。hostname、SSH設定、firewall、network、filesystem、kernelを変更せず、必要なpackageだけを追加します。`apt full-upgrade`と`dist-upgrade`、不要な再起動は行いません。
+trainingホスト自身はOpenTofuの管理対象ではありません。教材用VMだけをOpenTofuで作成・破棄します。前提セットアップでは必要なpackageを追加し、既存のdefault network/poolを確認して必要なら起動・autostartします（poolがなければ保存先directoryとpoolを準備します）。hostname、SSH設定、firewall、network topology、partition/filesystem layout、kernelは変更しません。`apt full-upgrade`と`dist-upgrade`、不要な再起動は行いません。
 
 ## ディレクトリ
 
@@ -128,7 +128,7 @@ ansible-playbook \
   ansible/playbook.yml
 ```
 
-PlaybookはDocker公式APT repository、Docker Engine、Compose plugin、`docker` group、Application files、Compose serviceをVMへ設定します。DB passwordはrepository外のcontroller cacheから生成します。
+PlaybookはDocker公式APT repository、Docker Engine、Compose plugin、`docker` group、Application files、Compose serviceをVMへ設定します。DB passwordはrepository外のcontroller cacheから生成します。controller cacheとVM内のPostgreSQL volumeは同じpasswordを前提にするため、VMを残したままcacheを削除しないでください。
 
 ### 5. APIとPostgreSQLを確認
 
@@ -163,7 +163,7 @@ tofu -chdir=tofu state list
 
 stateが空になり、教材VMだけが消えたことを確認します。trainingホストのOpenTofu、Ansible、libvirt package、default network、default poolは残します。
 
-その後、Gitのcommit済みコードから「3. OpenTofuでVMを作成」以降を再実行します。最終的に`/health`と`/db`が再び成功すれば、再構築完了です。
+その後、同じ前提条件（default network/pool、SSH agent、実行時変数）がある環境で、Gitのcommit済みコードから「3. OpenTofuでVMを作成」以降を再実行します。destroy済みの新しいVMを作る場合は新しいstateが作られます。最終的に`/health`と`/db`が再び成功すれば、再構築完了です。
 
 ## Git管理
 
@@ -194,19 +194,23 @@ commitしないもの:
 
 `app/.env.example`は例なのでcommitできますが、実際の`app/.env`はcommitしません。OpenTofu stateにはcloud-init user-dataなどが含まれる可能性があるため、stateも秘密情報として扱います。
 
+provider `0.9.9`とlock fileは固定していますが、Ubuntu cloud image、APT package、pipxのAnsible、Docker package、container image tagは外部から取得します。日付付きURLを使っていても、完全なbit単位の再現性までは保証しません。本番ではchecksum、image digest、package repository snapshotなどを別途固定します。
+
 ## 役割の境界
 
 - OpenTofu: VM、network接続、disk、libvirt resource。
 - Ansible: OS package、user/group、Docker導入、設定ファイル、service。
 - Docker / Compose: Application image、API、PostgreSQL、container network・volume。
 
-OpenTofuの`remote-exec`へ大量のshellを入れません。AnsibleだけでVMを作りません。AnsibleでApplication imageを作りません。ComposeでhostのSSHやsystemdを管理しません。
+OpenTofuの`remote-exec`へ大量のshellを入れません。AnsibleだけでVMを作りません。Application imageの定義は`app/`が所有し、AnsibleはComposeのbuild・startを起動します。ComposeでhostのSSHやsystemdを管理しません。
 
 ## 注意
 
 - PostgreSQLをComposeで動かすのは教材を自己完結させるためです。本番でも必ずComposeでDBを運用すべきという意味ではありません。
+- named volumeは同じVM内でcontainerを作り直す間の保存領域です。`tofu destroy`ではVM diskごと削除されるため、DBデータも失われます。named volumeはbackupではありません。残す必要があるデータは`pg_dump`などで退避します。
 - `tofu/main.tf`では`sec_label = [{ type = "none" }]`を使いません。この環境で確認した`source.volume`のAppArmor問題は、providerの`source.file`で解決し、dynamic security labelingを維持しています。`type = "none"`は通常必須ではなく、本番設定へコピーしません。
 - `docker` groupはDocker daemonを通じてhostを操作できる強い権限です。教材VMの学習者用設定であり、信頼できないユーザーが共用する本番hostへそのまま適用しません。
+- APIは学習用の未認証HTTP endpointで、`8080:8080`によりVMの全interfaceへ公開します。本番では認証・TLS・到達範囲の制限を設計します。
 - 使い捨てVMではIP再利用時の古いhost keyを`ssh-keygen -R`で除去します。本番ではhost keyを確認してから接続します。
 - `docker compose down -v`はDB volumeを削除します。データを残す実験では`docker compose down`だけを使います。
 - Kubernetes、Helm、GitOps、Packer、Vault、CI/CDは本教材の詳細範囲外です。本文の「次に学ぶもの」で位置付けだけ説明します。

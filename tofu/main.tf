@@ -23,7 +23,10 @@ resource "libvirt_volume" "vm_disk" {
 }
 
 resource "terraform_data" "resize_vm_disk" {
-  triggers_replace = [libvirt_volume.vm_disk.id]
+  triggers_replace = [
+    libvirt_volume.vm_disk.id,
+    tostring(var.vm_disk_gib),
+  ]
 
   provisioner "local-exec" {
     command = "sudo -n qemu-img resize '${libvirt_volume.vm_disk.path}' ${var.vm_disk_gib}G"

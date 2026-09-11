@@ -98,13 +98,27 @@
         group: docker
         mode: "0755"
 
-    - name: Copy the application and Compose files
-      ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../app/"
-        dest: "{{ app_dir }}/"
+    - name: Create the application source directory
+      ansible.builtin.file:
+        path: "{{ app_dir }}/src"
+        state: directory
         owner: root
         group: docker
-        directory_mode: "0755"
+        mode: "0755"
+
+    - name: Copy the application and Compose files
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../app/{{ item }}"
+        dest: "{{ app_dir }}/{{ item }}"
+        owner: root
+        group: docker
+        mode: "0644"
+      loop:
+        - .dockerignore
+        - Dockerfile
+        - compose.yaml
+        - requirements.txt
+        - src/app.py
       notify: Reconcile the Compose application
 
     - name: Write the runtime environment file without committing it

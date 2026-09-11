@@ -3,6 +3,7 @@ services:
     build: .
     env_file:
       - .env
+    restart: unless-stopped
     ports:
       - "8080:8080"
     depends_on:
@@ -19,6 +20,7 @@ services:
     image: postgres:18-alpine
     env_file:
       - .env
+    restart: unless-stopped
     volumes:
       # PostgreSQL 18+ stores data below a major-version subdirectory.
       - pgdata:/var/lib/postgresql

@@ -44,8 +44,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         if path == "/db":
             try:
                 self._send_json(200, database_status())
-            except Exception as error:  # The lab endpoint should expose a useful failure.
-                self._send_json(503, {"status": "error", "detail": str(error)})
+            except Exception:
+                self._send_json(503, {"status": "error", "detail": "database unavailable"})
             return
         if path == "/":
             self._send_json(200, {"service": "python-api", "endpoints": "/health, /db"})

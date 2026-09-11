@@ -8,7 +8,7 @@ Ubuntu 26.04のリリース情報は公式release notesで確認できます。[
 
 ## この教材のゴール
 
-この教材の最後では、Gitに保存したコードを使って、次の環境を何度でも作り直します。
+この教材の最後では、Gitに保存したcommit済みコードを使い、同じ前提条件の上で新しい環境を何度も作り直します。既存Infrastructureの更新・destroyには、その環境のOpenTofu stateが必要です。
 
 ```text
 training host
@@ -147,8 +147,10 @@ ssh-add -L
 接続後は、次のように接続先のidentityと権限を確認します。
 
 ```bash
-ssh ubuntu@VM_IP 'id; hostname; sudo -n true; systemctl is-system-running || true'
+ssh ubuntu@"$VM_IP" 'id; hostname; sudo -n true; systemctl is-system-running || true'
 ```
+
+この例は、接続先のIPをshell変数`VM_IP`へ設定済みの場合の書き方です。統合手順では、OpenTofuのoutputから同じ変数を設定します。
 
 `sudo`は管理者権限で一時的に処理を実行する仕組みです。`sudo -n true`はパスワード入力なしでsudoできるかを確認します。
 
@@ -265,6 +267,8 @@ VMはOS境界を作るのに向き、containerはApplicationの配布単位を�
 
 `app/Dockerfile`は、APIを8080/tcpで待ち受けるimageを作ります。APIの`/health`はDBを使わず応答し、`/db`はPostgreSQLへ接続して`SELECT 1`を実行します。
 
+ここからの手作業は、Dockerが導入済みのローカル環境で行う任意演習です。trainingホストにはDockerを導入しません。統合手順では、AnsibleでDockerを導入した後の教材VM内で実行します。
+
 ```bash
 cd app
 docker build -t modern-infrastructure-api:local .
@@ -318,16 +322,22 @@ compose.yaml
 - `db`のhealthcheckが成功してから`api`を起動する。
 - DB passwordなどは`.env`から読み込む。
 
+このlabのAPIは認証・TLSなしで、`8080:8080`によりVMの全interfaceへ公開します。本番では認証、TLS、到達範囲の制限を別途設計します。
+
 `depends_on`のhealth条件により、「containerプロセスが起動した」だけでなく「DBが接続を受け付けられる」状態を待たせます。Composeのservice依存とhealthcheckの関係は公式仕様に従っています。[7]
 
 PostgreSQLをComposeで動かすのは、この教材を自己完結させるためです。本番環境でも必ずComposeでDBを運用すべき、という意味ではありません。本番では、バックアップ、可用性、更新、監視、障害復旧を含めた運用方式を別に選びます。
 
+named volumeは、同じVM内でcontainerを作り直す間の保存領域です。`tofu destroy`ではVM diskごと削除されるため、DBデータも失われます。named volumeはbackupではないので、残す必要があるデータは`pg_dump`などで退避します。
+
 ### 5.3 手を動かす
+
+この手順もDockerが導入済みのローカル環境で行う任意演習です。`POSTGRES_PASSWORD`と`DB_PASSWORD`の両方を同じローカルsecretへ置き換えてから実行してください。値が一致しないと`/db`は失敗します。`docker compose config --quiet`はこの一致を検証しません。
 
 ```bash
 cd app
 cp .env.example .env
-# .envの値を確認し、repositoryへcommitしない
+# .envの2つのpasswordを同じローカルsecretへ置き換え、repositoryへcommitしない
 docker compose config --quiet
 docker compose up --detach --build
 docker compose ps
@@ -511,6 +521,8 @@ libvirt API --------┘
 
 stateには接続情報、resource属性、cloud-init user-dataなど、環境によっては機密情報が含まれる可能性があります。[17] そのため`*.tfstate`と`*.tfstate.*`をGitへ追加しません。stateを共有する必要があるチームでは、アクセス制御・暗号化・ロックを備えたbackendを別途設計します。
 
+Git archiveに含まれるのは設定とコードであり、既存Infrastructureのstateではありません。既存VMの更新・destroyには、そのVMを管理しているstateが必要です。freshなarchive directoryで`apply`すると、新しいstateと新しい教材VMを作ります。
+
 ### 8.4 CLIの役割
 
 ```bash
@@ -522,7 +534,7 @@ tofu destroy    # stateで管理するresourceを削除
 tofu output     # output値を表示
 ```
 
-`tofu fmt`はHCLの書式をそろえます。`init`後に生成される`.terraform.lock.hcl`はproviderの選択を固定するため、Gitへ含めます。一方、`.terraform/`はキャッシュなので含めません。
+`tofu fmt`はHCLの書式をそろえます。`init`後に生成される`.terraform.lock.hcl`はproviderの選択を固定するため、Gitへ含めます。一方、`.terraform/`はキャッシュなので含めません。lock fileが固定するのはproviderであり、cloud image、APT package、pipxのAnsible、Docker package、container image tagまで固定するものではありません。したがって、この教材は外部artifactが取得できる範囲での再構築を扱い、完全なbit単位の再現性は主張しません。
 
 ### ここまでで理解しておくこと
 
@@ -626,7 +638,7 @@ trainingホストは教材上「KVMが利用可能なLinux学習用ホスト」�
 
 ### Phase 2: 必要なpackageとCLIを導入する
 
-trainingホストでは、教材に必要なpackageだけを追加します。
+trainingホストでは、教材に必要なpackageだけを追加します。前提セットアップでは、既存のdefault network/poolを確認し、必要な場合だけ起動・autostartまたは保存先directory・poolの準備を行います。
 
 ```bash
 sudo apt update
@@ -752,7 +764,7 @@ ansible-playbook \
   ansible/playbook.yml
 ```
 
-初回はDocker repositoryの鍵、package、ユーザーgroup、Application files、`.env`、Compose serviceが設定されます。Playbookが作る`.env`はrepository外のcontroller cacheから生成されます。値を画面やGitへ出しません。
+初回はDocker repositoryの鍵、package、ユーザーgroup、allowlistしたApplication files、`.env`、Compose serviceが設定されます。Playbookが作る`.env`はrepository外のcontroller cacheから生成されます。controller cacheとVM内のPostgreSQL volumeは同じpasswordを前提にするため、VMを残したままcacheを削除しないでください。値を画面やGitへ出しません。
 
 ### Phase 7: ComposeでAPIとPostgreSQLを起動する
 
@@ -849,7 +861,7 @@ git status --short
 git diff --check
 ```
 
-`.terraform.lock.hcl`を含むcommit済みのコードから、次の順で再構築します。
+`.terraform.lock.hcl`を含むcommit済みのコードから、同じ前提条件（default network/pool、SSH agent、実行時変数、外部repositoryへ到達できる環境）の上で、次の順に新しいVMを再構築します。既存VMを更新・destroyする場合は、そのVMのstateがある作業directoryを使います。
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"

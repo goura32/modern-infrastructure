@@ -14,7 +14,7 @@
 - `training`ユーザーから`sudo -n true`が成功
 - `ssh -A training`経由でguest用SSH agent forwardingを確認
 
-trainingホストへ追加したのは、教材実行に必要なGit、QEMU/KVM、libvirt、OpenTofu、Ansible等のpackage・CLIだけです。hostname、SSH設定、firewall、trainingホストのnetwork、partition/filesystem、kernelは変更していません。`apt full-upgrade`、`dist-upgrade`、不要な再起動は実行していません。
+trainingホストへ追加したのは、教材実行に必要なGit、QEMU/KVM、libvirt、OpenTofu、Ansible等のpackage・CLIと、既存default network/poolの確認・起動/autostart（必要時の保存先directory・pool準備）です。hostname、SSH設定、firewall、network topology、partition/filesystem layout、kernelは変更していません。`apt full-upgrade`、`dist-upgrade`、不要な再起動は実行していません。
 
 導入・検証した主なCLI:
 
@@ -40,6 +40,8 @@ Ubuntu 26.04では`qemu-kvm` packageにAPT候補がなかったため、実際�
 ## 2. OpenTofu単体
 
 `tofu/versions.tf`で`dmacvicar/libvirt` providerを`0.9.9`へ固定し、`.terraform.lock.hcl`を生成してGitへ含めました。
+
+`tofu init`ではprovider registryにGPG keyが登録されていないため、signature validation skippedという表示が出ました。lock fileのversionとhashesは使用されますが、provider配布元の署名検証が完了したという意味ではありません。
 
 Git archiveから展開したfresh directoryで次を実行し、成功しました。
 
@@ -98,7 +100,7 @@ ok=16 changed=8 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0
 - Docker serviceをenable・start
 - `ubuntu`を`docker` groupへ追加
 - SSH connectionをresetして新しいsupplementary groupを反映
-- applicationと`compose.yaml`を`/opt/modern-infrastructure/app`へ配置
+- allowlistしたApplication filesと`compose.yaml`を`/opt/modern-infrastructure/app`へ配置
 - runtime `.env`をrepository外へ生成
 - Compose modelを`docker compose config --quiet`で検証
 - handlerでComposeをbuild・起動
@@ -134,7 +136,7 @@ curl --fail --silent "http://${VM_IP}:8080/db"
 {"status": "ok", "database": "postgresql"}
 ```
 
-`/db` endpointはAPIコンテナからPostgreSQLへ接続し、`SELECT 1`相当の確認を通過しています。PostgreSQLは教材を自己完結させるためComposeで実行しています。本番で必ずComposeを使うという判断ではありません。
+`/db` endpointはAPIコンテナからPostgreSQLへ接続し、`SELECT 1`相当の確認を通過しています。PostgreSQLは教材を自己完結させるためComposeで実行しています。本番で必ずComposeを使うという判断ではありません。named volumeは同じVM内でのcontainer再作成向けで、`tofu destroy`ではVM diskと一緒にDBデータが失われ、backupにはなりません。
 
 ## 6. plan、destroy、Gitからの再構築
 
@@ -152,7 +154,7 @@ Destroy complete! Resources: 5 destroyed.
 
 destroy直後に、教材domainと教材volumeが存在しないこと、libvirtのdefault network・default storage poolが残ることを確認しました。trainingホストの導入済みCLIとlibvirt serviceも残っています。
 
-さらに、repositoryのHEADを`git archive`で`~/modern-infrastructure-final`へ展開し、元の作業directoryや固定inventoryに依存せず、archiveの内容だけで次を再実行しました。
+さらに、repositoryのHEADを`git archive`で`~/modern-infrastructure-final`へ展開し、元の作業directoryや固定inventoryに依存せず、同じ前提条件（default network/pool、SSH agent、実行時変数、外部repositoryへの接続）の上で次を再実行しました。archiveには既存Infrastructureのstateは含まれないため、新しいstateと教材VMを作成する検証です。
 
 ```text
 tofu fmt -check / init / validate / apply       成功
@@ -205,7 +207,7 @@ local repositoryの最終状態:
 ```text
 branch: main
 working tree: clean
-tracked files: 18
+tracked files: 19
 provider lock file mode: 644
 ```
 
@@ -214,7 +216,7 @@ provider lock file mode: 644
 - `tofu/.terraform.lock.hcl`はtracked
 - `.terraform/`、tfstate、tfplan、tfvarsはignore
 - `app/.env`はignore
-- runtime passwordはcontrollerのcacheとVM上の`.env`だけに置き、repositoryへ書き込まない
+- runtime passwordはcontrollerのcacheとVM上の`.env`だけに置き、repositoryへ書き込まない。VMを残したままcontroller cacheを削除しない
 - SSH private key、password、API key、tokenはrepository・validation notesへ書き込まない
 
 providerのstateはtraining側の作業directoryに残り得ますが、Gitへは追加していません。stateには接続情報やcloud-init由来の値など機密性のある情報が含まれ得るため、backendを使う場合もアクセス制御と暗号化を検討します。

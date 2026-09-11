@@ -15,6 +15,10 @@ crash.*.log
 *.pem
 *.key
 *.pub
+*.secret
+*.credentials
+*.password
+*.token
 secrets/
 
 # Other generated artifacts
