@@ -719,7 +719,7 @@ test -n "$VM_IP"
 printf '%s\n' "$VM_IP"
 ssh-keygen -R "$VM_IP" >/dev/null 2>&1 || true
 ssh -o StrictHostKeyChecking=accept-new ubuntu@"$VM_IP" \
-  'id; hostname; sudo -n true; test -e /dev/kvm || true'
+  'id; hostname; sudo -n true'
 ```
 
 IPは設定ファイルへ転記しません。毎回`tofu output -raw vm_ip`から得ます。destroy後の再構築で同じIPへ別のhost keyが割り当てられる場合に備え、実験用の古いknown_hosts entryだけを`ssh-keygen -R`で除去します。
@@ -802,10 +802,10 @@ tofu -chdir=tofu plan -input=false
 停止・削除の順序は、OpenTofuが管理しているVMとvolumeを対象にします。
 
 ```bash
-tofu -chdir=tofu destroy -input=false
+tofu -chdir=tofu destroy
 ```
 
-自動承認する場合は、計画を確認した後だけ使います。
+計画を確認しながら実行する通常形です。自動承認する場合は、計画を確認した後だけ次を使います。
 
 ```bash
 tofu -chdir=tofu destroy -input=false -auto-approve
