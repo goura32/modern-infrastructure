@@ -133,7 +133,7 @@ PlaybookはDocker公式APT repository、Docker Engine、Compose plugin、`docker
 
 ```bash
 ssh ubuntu@"$VM_IP" \
-  'cd /opt/modern-infrastructure/app && docker compose ps && docker compose config --quiet'
+  'cd /opt/modern-infrastructure/app && docker compose -p modern-infrastructure ps && docker compose -p modern-infrastructure config --quiet'
 
 curl --fail --silent "http://${VM_IP}:8080/health"
 printf '\n'

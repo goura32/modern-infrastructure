@@ -759,16 +759,16 @@ Ansibleが配置したVM内のApplication directoryへSSHで入り、Compose状�
 
 ```bash
 ssh ubuntu@"$VM_IP" \
-  'cd /opt/modern-infrastructure/app && docker compose ps && docker compose config --quiet'
+  'cd /opt/modern-infrastructure/app && docker compose -p modern-infrastructure ps && docker compose -p modern-infrastructure config --quiet'
 ```
 
 ComposeはAnsibleのhandlerから起動されます。手動で再起動する場合は、VM内で次を使います。
 
 ```bash
 cd /opt/modern-infrastructure/app
-docker compose up --detach --build
-docker compose ps
-docker compose logs --tail=50 api db
+docker compose -p modern-infrastructure up --detach --build
+docker compose -p modern-infrastructure ps
+docker compose -p modern-infrastructure logs --tail=50 api db
 ```
 
 ### Phase 8: trainingホストからAPIとDB接続を確認する
@@ -934,7 +934,7 @@ Kubernetesを理解するためにも、まずは今回のように「VMの中�
 - [ ] `tofu init`、`validate`、`plan`、`apply`が成功した。
 - [ ] `tofu output -raw vm_ip`からIPを取得した。
 - [ ] IPをinventoryへ手入力せずAnsibleを実行した。
-- [ ] `docker compose ps`で`api`と`db`を確認した。
+- [ ] `docker compose -p modern-infrastructure ps`で`api`と`db`を確認した。
 - [ ] trainingから`/health`へアクセスした。
 - [ ] `/db`でAPIからPostgreSQLへの接続を確認した。
 - [ ] Ansible 2回目が`changed=0`だった。
