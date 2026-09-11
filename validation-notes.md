@@ -43,6 +43,8 @@ Ubuntu 26.04では`qemu-kvm` packageにAPT候補がなかったため、実際�
 
 `tofu init`ではprovider registryにGPG keyが登録されていないため、signature validation skippedという表示が出ました。lock fileのversionとhashesは使用されますが、provider配布元の署名検証が完了したという意味ではありません。
 
+provider以外の外部入力（Ubuntu cloud image、APT package、pipxのAnsible、Docker package、container image tag）は完全には固定していません。以下の再構築成功は、同じ前提条件と外部artifactが利用できる時点での結果であり、bit単位の再現性を示すものではありません。
+
 Git archiveから展開したfresh directoryで次を実行し、成功しました。
 
 ```bash
@@ -90,7 +92,7 @@ ansible-playbook -i "${VM_IP}," -u ubuntu ansible/playbook.yml
 初回Playbook結果:
 
 ```text
-ok=16 changed=8 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0
+ok=17 changed=9 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0
 ```
 
 初回に確認した内容:
@@ -104,11 +106,13 @@ ok=16 changed=8 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0
 - runtime `.env`をrepository外へ生成
 - Compose modelを`docker compose config --quiet`で検証
 - handlerでComposeをbuild・起動
+- APIとDBへ`restart: unless-stopped`を設定
+- `.dockerignore`、Dockerfile、Compose、requirements、`src/app.py`だけをallowlistで転送
 
 同じPlaybookの2回目:
 
 ```text
-ok=15 changed=0 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0
+ok=16 changed=0 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0
 ```
 
 2回目はDocker repository、package、service、files、Composeを含め不要な変更がありませんでした。
@@ -160,11 +164,11 @@ destroy直後に、教材domainと教材volumeが存在しないこと、libvirt
 tofu fmt -check / init / validate / apply       成功
 OpenTofu apply                                  5 added
 SSH + cloud-init                                成功
-Ansible 初回                                    failed=0
+Ansible 初回                                    ok=17, changed=9, failed=0
 Compose api/db                                  healthy
 /health                                         HTTP成功
 /db                                             PostgreSQL接続成功
-Ansible 2回目                                  changed=0, failed=0
+Ansible 2回目                                  ok=16, changed=0, failed=0
 tofu plan                                      No changes
 ```
 
@@ -199,6 +203,8 @@ Docker repository追加直後のpackage taskに`cache_valid_time`を残すと、
 ### PostgreSQL 18のvolume mount
 
 `postgres:18-alpine`ではmajor version別のdata directoryを扱うため、volumeを`/var/lib/postgresql`へmountしました。旧`/var/lib/postgresql/data`では初期化に失敗しました。
+
+追加レビュー後のfresh archiveでも、allowlist転送、Composeのrestart policy、`/health`、`/db`、DB停止時の固定503応答と復旧を確認しました。`TF_VAR_vm_disk_gib=26`のplanでは`terraform_data.resize_vm_disk`のreplacementを確認し、容量変更時もresize処理が再評価されます。検証後の最終destroyは`Resources: 5 destroyed`で、教材domain・専用volumeはなく、default network/poolは維持されています。
 
 ## 8. Git・秘密情報チェック
 
