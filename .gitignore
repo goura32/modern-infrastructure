@@ -17,6 +17,14 @@ crash.*.log
 *.pub
 secrets/
 
+# Other generated artifacts
+*.log
+*.qcow2
+*.iso
+*.img
+.cache/
+tmp/
+
 # Local/editor/OS files
 .DS_Store
 .vscode/
