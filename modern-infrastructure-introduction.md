@@ -570,6 +570,8 @@ cloud-init diskとnetworkのschemaもprovider固有です。[31][32]
 
 Ubuntu cloud imageのqcow2ヘッダは初期容量のままなので、`terraform_data`の一度だけの`local-exec`で対象volumeへ`qemu-img resize`を行います。これはtraining host上のVM diskを拡張するInfrastructure操作であり、guest OSへshellを送り込む`remote-exec`ではありません。起動後はcloud-initの`resize_rootfs: true`がguestのpartitionとfilesystemを拡張します。
 
+resource間のdependency（依存関係）は、参照や`depends_on`で表します。この構成では、disk resizeが終わってからdomainを作成する順序を明示しています。
+
 cloud-initは、初回起動時にuser、authorized key、sudo設定などを適用する仕組みです。[24] `cloud-init.yaml`では、次を設定します。
 
 - user `ubuntu`を作る。
@@ -588,6 +590,13 @@ sec_label = [{ type = "none" }]
 ```
 
 これはこの検証環境で動作させるためのラボ限定の回避策です。production VMへそのままコピーせず、実環境ではlibvirt/AppArmorのversion、profile生成、ディスクpath許可を確認し、必要なsecurity labelingを維持してください。
+
+### ここまでで理解しておくこと
+
+- OpenTofu providerがlibvirt APIを呼び、volume・cloud-init disk・domainを作ること。
+- `terraform_data`はdisk拡張というInfrastructure操作だけを補助し、OS設定を担当しないこと。
+- `dependency`と`depends_on`によって、disk拡張後にdomainを起動すること。
+- VM IPはstateへ手入力せず、outputとAnsibleのinline inventoryへ渡すこと。
 
 ## 10. 統合ハンズオン
 
