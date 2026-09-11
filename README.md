@@ -7,7 +7,7 @@ Linux / SSH、Git、Docker、Docker Compose、Ansible、OpenTofu、libvirt / KVM
 ## 学ぶ責務分離
 
 ```text
-OpenTofu                 VM・ディスク・libvirt network
+OpenTofu                 VM・ディスク・既存libvirt networkへの接続
     ↓
 Ansible                  Ubuntu OS・package・Docker・設定
     ↓
@@ -22,7 +22,7 @@ Docker / Docker Compose  Python Web API + PostgreSQL
 - OS: Ubuntu Server 26.04 LTS
 - KVM: 利用可能
 - 接続: SSH公開鍵認証
-- VM: Ubuntu Server、2 vCPU、4 GiB RAM、25 GiB qcow2 disk
+- VM: Ubuntu Server、2 vCPU、4 GiB RAM、25 GiB virtual disk
 - network: 既存のlibvirt `default` NAT network
 
 trainingホスト自身はOpenTofuの管理対象ではありません。教材用VMだけを作成・破棄します。hostname、SSH設定、firewall、network、filesystem、kernelを変更せず、必要なpackageだけを追加します。`apt full-upgrade`と`dist-upgrade`、不要な再起動は行いません。
@@ -41,7 +41,8 @@ modern-infrastructure/
 │   ├── main.tf
 │   ├── variables.tf
 │   ├── outputs.tf
-│   └── cloud-init.yaml
+│   ├── cloud-init.yaml
+│   └── .terraform.lock.hcl
 ├── ansible/
 │   ├── inventory/README.md
 │   └── playbook.yml
@@ -105,7 +106,7 @@ tofu -chdir=tofu plan -input=false
 tofu -chdir=tofu apply -input=false -auto-approve
 ```
 
-`tofu plan`で対象が教材VM、volume、cloud-init diskだけであることを確認します。`apply`後、IPをoutputから取得します。
+`tofu plan`で対象が教材VM、専用volume、cloud-init disk、disk拡張用の補助resourceだけであることを確認します。`apply`後、IPをoutputから取得します。
 
 ```bash
 VM_IP="$(tofu -chdir=tofu output -raw vm_ip)"
@@ -203,7 +204,9 @@ OpenTofuの`remote-exec`へ大量のshellを入れません。AnsibleだけでVM
 ## 注意
 
 - PostgreSQLをComposeで動かすのは教材を自己完結させるためです。本番でも必ずComposeでDBを運用すべきという意味ではありません。
-- `sec_label = [{ type = "none" }]`は、このUbuntu 26.04/libvirt検証環境でproviderのAppArmor動的profileがvolume pathを扱えなかったためのラボ限定回避策です。本番へコピーせず、security labelingを維持する方法を別途検証してください。
+- `tofu/main.tf`では`sec_label = [{ type = "none" }]`を使いません。この環境で確認した`source.volume`のAppArmor問題は、providerの`source.file`で解決し、dynamic security labelingを維持しています。`type = "none"`は通常必須ではなく、本番設定へコピーしません。
+- `docker` groupはDocker daemonを通じてhostを操作できる強い権限です。教材VMの学習者用設定であり、信頼できないユーザーが共用する本番hostへそのまま適用しません。
+- 使い捨てVMではIP再利用時の古いhost keyを`ssh-keygen -R`で除去します。本番ではhost keyを確認してから接続します。
 - `docker compose down -v`はDB volumeを削除します。データを残す実験では`docker compose down`だけを使います。
 - Kubernetes、Helm、GitOps、Packer、Vault、CI/CDは本教材の詳細範囲外です。本文の「次に学ぶもの」で位置付けだけ説明します。
 

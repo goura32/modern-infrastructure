@@ -35,6 +35,8 @@ Docker Compose v5.5.1
 
 libvirtの既存`default` NAT networkを使い、bridge networkは追加していません。default storage poolは`/var/lib/libvirt/images`をtargetにして起動・autostartしました。
 
+Ubuntu 26.04では`qemu-kvm` packageにAPT候補がなかったため、実際の導入には`qemu-system-x86`と`qemu-utils`を使いました。`libvirt-daemon-config-network`でdefault networkを用意し、`training`ユーザーを`libvirt,kvm` groupへ追加して再接続しました。
+
 ## 2. OpenTofu単体
 
 `tofu/versions.tf`で`dmacvicar/libvirt` providerを`0.9.9`へ固定し、`.terraform.lock.hcl`を生成してGitへ含めました。
@@ -178,15 +180,11 @@ sudo -n qemu-img resize <managed-volume-path> 25G
 
 ### libvirt/AppArmor環境差
 
-Ubuntu 26.04のtraining環境とprovider 0.9.9の組み合わせでは、volumeのPOSIX権限を設定してもQEMU起動時にlibvirtの動的AppArmor profileがディスクを許可できず、`Permission denied`になりました。
+Ubuntu 26.04.1、libvirt 12.0.0、provider 0.9.9、Nested KVMの組み合わせで、domainのdisk sourceに`volume`を使うと、POSIX権限を設定していてもQEMU起動時にAppArmorから`Permission denied`を受けました。他のversion・環境へ同じ結果を一般化できるかは確認していません。
 
-最終構成では、
+VM diskのowner/group/modeはlibvirtのQEMU service accountへ明示しています。さらにprovider 0.9.9の`source.file`で、管理対象volumeの絶対pathをVM diskとcloud-init ISOの両方へ渡す一時VMを作成しました。`sec_label`を指定しなくてもapplyに成功し、domain XMLはdynamic AppArmor labelとfile sourceになりました。最終構成はこの方式を採用し、host全体のAppArmorを無効化・変更していません。
 
-- VM diskのowner/group/modeをlibvirt QEMU UID/GIDへ明示
-- backing storeを使わず、Ubuntu imageを単一qcow2 volumeへ取り込み
-- `sec_label = [{ type = "none" }]`を教材VMだけへ指定
-
-としました。`sec_label=none`はtrainingの使い捨て検証VMに限定した回避策です。ホスト全体のAppArmorを無効化・変更していません。本番VMへそのまま適用する設定ではありません。
+`sec_label = [{ type = "none" }]`は通常のlibvirt利用に必須ではなく、最終コードへ残していません。security labelingを弱めるため、本番VMの一般的な回避策としてコピーしてはいけません。
 
 ### APT cache
 
@@ -207,7 +205,7 @@ local repositoryの最終状態:
 ```text
 branch: main
 working tree: clean
-tracked files: 17
+tracked files: 18
 provider lock file mode: 644
 ```
 

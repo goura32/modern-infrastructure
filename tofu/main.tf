@@ -71,10 +71,6 @@ resource "libvirt_domain" "vm" {
   memory_unit = "MiB"
   vcpu        = var.vm_vcpus
 
-  # The training host's Ubuntu 26.04 AppArmor helper does not generate a
-  # usable per-domain disk rule for this provider's volume XML. Keep this
-  # exception scoped to the disposable lab VM; do not disable AppArmor host-wide.
-  sec_label = [{ type = "none" }]
   features  = { acpi = true }
 
   os = {
@@ -88,9 +84,8 @@ resource "libvirt_domain" "vm" {
     disks = [
       {
         source = {
-          volume = {
-            pool   = libvirt_volume.vm_disk.pool
-            volume = libvirt_volume.vm_disk.name
+          file = {
+            file = libvirt_volume.vm_disk.path
           }
         }
         target = {
@@ -104,9 +99,8 @@ resource "libvirt_domain" "vm" {
       {
         device = "cdrom"
         source = {
-          volume = {
-            pool   = libvirt_volume.cloudinit.pool
-            volume = libvirt_volume.cloudinit.name
+          file = {
+            file = libvirt_volume.cloudinit.path
           }
         }
         target = {

@@ -37,7 +37,7 @@ IaC（Infrastructure as Code）とは、サーバーやネットワークなど�
 
 ```text
 OpenTofu
-  VM・ディスク・libvirt networkなどのInfrastructure
+  VM・ディスク・既存libvirt networkへの接続などのInfrastructure
           │
           ▼
 Ansible
@@ -142,6 +142,8 @@ ssh-add -L
 
 `ssh-add -L`が公開鍵を表示します。表示内容をログへ保存しないでください。`ssh -A`はagent forwardingを有効にします。環境のSSH aliasがagent forwardingを既に有効にしている場合は`ssh training`でも構いません。
 
+教材の再構築では、IP再利用時にhost keyが変わることがあるため`accept-new`と`ssh-keygen -R`を使います。これは使い捨てVM向けの簡略化です。本番では接続先のfingerprintを確認してからknown_hostsを更新します。
+
 接続後は、次のように接続先のidentityと権限を確認します。
 
 ```bash
@@ -149,6 +151,8 @@ ssh ubuntu@VM_IP 'id; hostname; sudo -n true; systemctl is-system-running || tru
 ```
 
 `sudo`は管理者権限で一時的に処理を実行する仕組みです。`sudo -n true`はパスワード入力なしでsudoできるかを確認します。
+
+この教材では手順を簡単にするため`ubuntu`へ`NOPASSWD:ALL`を設定しています。本番では必要な操作だけに権限を絞ります。
 
 ### ここまでで理解しておくこと
 
@@ -384,6 +388,8 @@ managed VM
 
 Dockerの導入先はhost VMです。trainingホストへDockerを導入することを統合手順の前提にはしません。Docker公式のUbuntu向け導入は公式APT repositoryを使う方法です。[4]
 
+`ubuntu`を`docker` groupへ入れると、`sudo`なしでComposeを実行できます。ただしDocker daemonを通じてhostを操作できる強い権限でもあります。これは教材VMの学習者用設定であり、信頼できないユーザーが共用する本番hostへそのまま適用しません。
+
 ### 6.3 inline inventoryでIP転記をなくす
 
 VMのIPを`inventory/hosts`へ手入力しません。OpenTofuのoutputをshell変数に読み込み、末尾にカンマを付けた一時inventoryとしてAnsibleへ渡します。
@@ -540,7 +546,8 @@ modern-infrastructure/
 │   ├── main.tf
 │   ├── variables.tf
 │   ├── outputs.tf
-│   └── cloud-init.yaml
+│   ├── cloud-init.yaml
+│   └── .terraform.lock.hcl
 ├── ansible/
 │   ├── inventory/README.md
 │   └── playbook.yml
@@ -562,13 +569,13 @@ cloud-init diskとnetworkのschemaもprovider固有です。[31][32]
 
 `main.tf`が管理するのは次だけです。
 
-- Ubuntu Server cloud imageを取り込む25 GiB qcow2 VM disk。
+- Ubuntu Server cloud imageを取り込む25 GiB VM disk。
 - cloud-init user-dataを入れたISO。
 - 2 vCPU、4 GiB RAMのlibvirt domain。
 - 既存の`default` NAT networkへ接続するNIC。
 - DHCP leaseを読むdata source。
 
-Ubuntu cloud imageのqcow2ヘッダは初期容量のままなので、`terraform_data`の一度だけの`local-exec`で対象volumeへ`qemu-img resize`を行います。これはtraining host上のVM diskを拡張するInfrastructure操作であり、guest OSへshellを送り込む`remote-exec`ではありません。起動後はcloud-initの`resize_rootfs: true`がguestのpartitionとfilesystemを拡張します。
+Ubuntu cloud imageを25 GiBのVM diskとして使うため、`terraform_data`でdisk容量を整え、起動後にcloud-initでguestのroot filesystemを拡張します。いずれもVMを用意するInfrastructure側の処理です。
 
 resource間のdependency（依存関係）は、参照や`depends_on`で表します。この構成では、disk resizeが終わってからdomainを作成する順序を明示しています。
 
@@ -583,13 +590,11 @@ cloud-initは、初回起動時にuser、authorized key、sudo設定などを適
 
 ### 9.3 実機での注意点
 
-今回のUbuntu 26.04/libvirt環境では、provider 0.9.9が生成する動的AppArmor profileにvolume pathが入らず、QEMUがディスクを開けない事象を確認しました。ホスト全体のAppArmor設定は変更せず、検証用で破棄可能なdomainに限り、`main.tf`の`sec_label`でsecurity labelを無効化しています。
+今回のUbuntu 26.04.1、libvirt 12.0.0、provider 0.9.9の組み合わせでは、domainのdisk sourceに`volume`を使うとAppArmorがQEMUのdisk accessを拒否する事象を確認しました。これは通常のlibvirt利用で必須の設定ではなく、他のversion・環境へ一般化できるとは限りません。
 
-```hcl
-sec_label = [{ type = "none" }]
-```
+この教材では、libvirt volumeを管理しながらdomain側ではproviderの`source.file`で実体pathを参照します。同じ環境の使い捨てVMで`sec_label`を指定せずに起動でき、domain XMLにもdynamic AppArmor labelが残ることを確認しました。したがって、security labelingを弱める`sec_label = [{ type = "none" }]`は最終コードへ追加しません。
 
-これはこの検証環境で動作させるためのラボ限定の回避策です。production VMへそのままコピーせず、実環境ではlibvirt/AppArmorのversion、profile生成、ディスクpath許可を確認し、必要なsecurity labelingを維持してください。
+実環境ではlibvirt/AppArmorのversionとdisk pathの許可を確認し、必要なsecurity labelingを維持してください。`type = "none"`を通常の解決策としてproduction VMへコピーしてはいけません。
 
 ### ここまでで理解しておくこと
 
@@ -625,11 +630,19 @@ trainingホストでは、教材に必要なpackageだけを追加します。
 ```bash
 sudo apt update
 sudo apt install -y \
-  ca-certificates curl gnupg git \
-  qemu-kvm qemu-system-x86 qemu-utils \
-  libvirt-daemon-system libvirt-clients \
-  libvirt-daemon-config-network cpu-checker pipx
+  ca-certificates curl gnupg git openssh-client \
+  qemu-system-x86 qemu-utils \
+  libvirt-daemon-system libvirt-clients libvirt-daemon-config-network \
+  cpu-checker pipx
 ```
+
+trainingユーザーがlibvirtを操作できるようにgroupへ追加します。
+
+```bash
+sudo usermod -aG libvirt,kvm "$USER"
+```
+
+groupの変更を反映するため、いったん`exit`してから`ssh -A training`で再接続します。以降のPhaseは再接続後のsessionで実行してください。
 
 Dockerはtrainingホストではなく、後でAnsibleから教材VMへ導入します。Docker Engineの公式APT repository手順をPlaybookへ実装しています。[4]
 
@@ -642,11 +655,14 @@ sudo install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://get.opentofu.org/opentofu.gpg \
   | sudo tee /etc/apt/keyrings/opentofu.gpg >/dev/null
 curl -fsSL https://packages.opentofu.org/opentofu/tofu/gpgkey \
-  | sudo gpg --dearmor --yes -o /etc/apt/keyrings/opentofu.gpg
-sudo chmod a+r /etc/apt/keyrings/opentofu.gpg
+  | sudo gpg --no-tty --batch --dearmor \
+      -o /etc/apt/keyrings/opentofu-repo.gpg
+sudo chmod a+r /etc/apt/keyrings/opentofu.gpg \
+  /etc/apt/keyrings/opentofu-repo.gpg
 printf '%s\n' \
-  'deb [signed-by=/etc/apt/keyrings/opentofu.gpg] https://packages.opentofu.org/opentofu/tofu/any/ any main' \
+  'deb [signed-by=/etc/apt/keyrings/opentofu.gpg,/etc/apt/keyrings/opentofu-repo.gpg] https://packages.opentofu.org/opentofu/tofu/any/ any main' \
   | sudo tee /etc/apt/sources.list.d/opentofu.list >/dev/null
+sudo chmod a+r /etc/apt/sources.list.d/opentofu.list
 sudo apt update
 sudo apt install -y tofu
 ```
@@ -667,6 +683,8 @@ ansible --version
 ### Phase 3: libvirtのnetworkとstorageを確認する
 
 ```bash
+sudo virsh net-start default 2>/dev/null || true
+sudo virsh net-autostart default
 virsh -c qemu:///system net-info default
 virsh -c qemu:///system pool-info default
 virsh -c qemu:///system list --all
