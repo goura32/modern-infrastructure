@@ -638,7 +638,7 @@ trainingホストは教材上「KVMが利用可能なLinux学習用ホスト」�
 
 ### Phase 2: 必要なpackageとCLIを導入する
 
-trainingホストでは、教材に必要なpackageだけを追加します。前提セットアップでは、既存のdefault network/poolを確認し、必要な場合だけ起動・autostartまたは保存先directory・poolの準備を行います。
+trainingホストでは、教材に必要なpackage・CLIを追加し、`training`ユーザーを`libvirt,kvm` groupへ追加します。前提セットアップでは、既存のdefault network/poolを確認し、必要な場合だけ起動・autostartまたは保存先directory・poolの準備を行います。
 
 ```bash
 sudo apt update

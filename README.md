@@ -25,7 +25,7 @@ Gitへ保存したcommit済みコードから、同じ前提条件の上で新�
 - VM: Ubuntu Server、2 vCPU、4 GiB RAM、25 GiB virtual disk
 - network: 既存のlibvirt `default` NAT network
 
-trainingホスト自身はOpenTofuの管理対象ではありません。教材用VMだけをOpenTofuで作成・破棄します。前提セットアップでは必要なpackageを追加し、既存のdefault network/poolを確認して必要なら起動・autostartします（poolがなければ保存先directoryとpoolを準備します）。hostname、SSH設定、firewall、network topology、partition/filesystem layout、kernelは変更しません。`apt full-upgrade`と`dist-upgrade`、不要な再起動は行いません。
+trainingホスト自身はOpenTofuの管理対象ではありません。教材用VMだけをOpenTofuで作成・破棄します。前提セットアップでは必要なpackage・CLIを追加し、`training`ユーザーを`libvirt,kvm` groupへ追加し、既存のdefault network/poolを確認して必要なら起動・autostartします（poolがなければ保存先directoryとpoolを準備します）。hostname、SSH設定、firewall、network topology、partition/filesystem layout、kernelは変更しません。`apt full-upgrade`と`dist-upgrade`、不要な再起動は行いません。
 
 ## ディレクトリ
 

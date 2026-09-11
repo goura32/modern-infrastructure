@@ -14,7 +14,7 @@
 - `training`ユーザーから`sudo -n true`が成功
 - `ssh -A training`経由でguest用SSH agent forwardingを確認
 
-trainingホストへ追加したのは、教材実行に必要なGit、QEMU/KVM、libvirt、OpenTofu、Ansible等のpackage・CLIと、既存default network/poolの確認・起動/autostart（必要時の保存先directory・pool準備）です。hostname、SSH設定、firewall、network topology、partition/filesystem layout、kernelは変更していません。`apt full-upgrade`、`dist-upgrade`、不要な再起動は実行していません。
+trainingホストへ追加したのは、教材実行に必要なGit、QEMU/KVM、libvirt、OpenTofu、Ansible等のpackage・CLI、`training`ユーザーの`libvirt,kvm` group所属、既存default network/poolの確認・起動/autostart（必要時の保存先directory・pool準備）です。hostname、SSH設定、firewall、network topology、partition/filesystem layout、kernelは変更していません。`apt full-upgrade`、`dist-upgrade`、不要な再起動は実行していません。
 
 導入・検証した主なCLI:
 
