@@ -71,7 +71,7 @@ resource "libvirt_domain" "vm" {
   memory_unit = "MiB"
   vcpu        = var.vm_vcpus
 
-  features  = { acpi = true }
+  features = { acpi = true }
 
   os = {
     type         = "hvm"
