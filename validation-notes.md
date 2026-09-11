@@ -64,7 +64,7 @@ state listはdata sourceを含めて6行、実際の管理resourceは次の5つ�
 - `terraform_data.resize_vm_disk`
 - `libvirt_domain.vm`
 
-`tofu output -raw vm_ip`から、手入力なしで再構築ごとのVM IPを取得できました。最終rebuildでは`[REDACTED_PRIVATE_IP]`でした。
+`tofu output -raw vm_ip`から、手入力なしで再構築ごとのVM IPを取得できました。DHCPで変わる値のため、IPアドレスは固定記録していません。
 
 ## 3. SSHとguest filesystem
 
