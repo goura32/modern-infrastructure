@@ -555,6 +555,7 @@ modern-infrastructure/
     ├── compose.yaml
     ├── Dockerfile
     ├── requirements.txt
+    ├── .dockerignore
     ├── .env.example
     └── src/app.py
 ```
