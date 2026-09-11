@@ -2,7 +2,11 @@
 
 Linux / SSH、Git、Docker、Docker Compose、Ansible、OpenTofu、libvirt / KVMを一つの小さな環境で学ぶ教材です。
 
-詳細な説明は`modern-infrastructure-introduction.md`、実機で確認した結果は`validation-notes.md`にあります。
+詳細な説明は[教材本体](modern-infrastructure-introduction.md)、実機で確認した結果は[validation-notes.md](validation-notes.md)にあります。
+
+## 想定読者
+
+Linux CLIを多少使ったことがあり、Docker、Ansible、OpenTofu、libvirt / KVM、Infrastructure as Codeを体系的に学びたい初学者を想定しています。
 
 ## 学ぶ責務分離
 
@@ -217,8 +221,12 @@ OpenTofuの`remote-exec`へ大量のshellを入れません。AnsibleだけでVM
 
 ## ファイル別の入口
 
-- 概念、理由、全手順: `modern-infrastructure-introduction.md`
-- 実機検証の事実、修正履歴、完了条件: `validation-notes.md`
-- OpenTofuとlibvirt: `tofu/`
-- Ansibleとinline inventory: `ansible/`
-- Python APIとCompose: `app/`
+- 概念、理由、全手順: [modern-infrastructure-introduction.md](modern-infrastructure-introduction.md)
+- 実機検証の事実、修正履歴、完了条件: [validation-notes.md](validation-notes.md)
+- OpenTofuとlibvirt: [`tofu/`](tofu/)
+- Ansibleとinline inventory: [`ansible/`](ansible/)
+- Python APIとCompose: [`app/`](app/)
+
+## License
+
+この教材は[MIT License](LICENSE)で公開しています。
