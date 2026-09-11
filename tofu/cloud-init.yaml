@@ -1,0 +1,22 @@
+#cloud-config
+resize_rootfs: true
+ssh_pwauth: false
+disable_root: true
+ssh_deletekeys: true
+
+users:
+  - name: ${ssh_user}
+    gecos: Infrastructure learner
+    groups: [sudo]
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    shell: /bin/bash
+    lock_passwd: true
+    ssh_authorized_keys:
+      - "${ssh_public_key}"
+
+# The Ubuntu cloud image already contains cloud-init and normally has SSH.
+# Keeping this package declaration makes the bootstrap intent explicit.
+packages:
+  - openssh-server
+
+final_message: "cloud-init finished; the VM is ready for Ansible."

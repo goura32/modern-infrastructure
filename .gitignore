@@ -1,0 +1,25 @@
+# OpenTofu working data and state
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
+
+# Runtime secrets and generated files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pub
+secrets/
+
+# Local/editor/OS files
+.DS_Store
+.vscode/
+.idea/
+__pycache__/
+*.pyc

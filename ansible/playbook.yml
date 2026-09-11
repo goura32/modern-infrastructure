@@ -1,0 +1,152 @@
+---
+- name: Configure the Ubuntu application VM
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+    app_user: ubuntu
+    app_dir: /opt/modern-infrastructure/app
+    compose_project: modern-infrastructure
+    docker_keyring: /etc/apt/keyrings/docker.asc
+    docker_sources: /etc/apt/sources.list.d/docker.sources
+    docker_packages:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    controller_secret_dir: "{{ lookup('env', 'HOME') }}/.cache/modern-infrastructure"
+    app_db_password_file: "{{ controller_secret_dir }}/db_password"
+
+  pre_tasks:
+    - name: Create the controller-side secret directory
+      ansible.builtin.file:
+        path: "{{ controller_secret_dir }}"
+        state: directory
+        mode: "0700"
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Create or reuse a controller-side demo database password
+      ansible.builtin.set_fact:
+        app_db_password: "{{ lookup('ansible.builtin.password', app_db_password_file + ' length=32 chars=ascii_letters,digits') }}"
+      no_log: true
+
+  tasks:
+    - name: Install Docker repository prerequisites
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Ensure the APT keyring directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Install Docker's repository signing key
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: "{{ docker_keyring }}"
+        mode: "0644"
+
+    - name: Configure Docker's official APT repository
+      ansible.builtin.copy:
+        dest: "{{ docker_sources }}"
+        mode: "0644"
+        content: |
+          Types: deb
+          URIs: https://download.docker.com/linux/ubuntu
+          Suites: {{ ansible_facts.distribution_release }}
+          Components: stable
+          Architectures: amd64
+          Signed-By: {{ docker_keyring }}
+
+    - name: Install Docker Engine, Buildx, and Compose
+      ansible.builtin.apt:
+        name: "{{ docker_packages }}"
+        state: present
+        update_cache: true
+
+    - name: Ensure Docker starts at boot and is running
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Add the application user to the docker group
+      ansible.builtin.user:
+        name: "{{ app_user }}"
+        groups: docker
+        append: true
+
+    - name: Reconnect after changing supplementary groups
+      ansible.builtin.meta: reset_connection
+
+    - name: Create the application directory
+      ansible.builtin.file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: root
+        group: docker
+        mode: "0755"
+
+    - name: Copy the application and Compose files
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../app/"
+        dest: "{{ app_dir }}/"
+        owner: root
+        group: docker
+        directory_mode: "0755"
+      notify: Reconcile the Compose application
+
+    - name: Write the runtime environment file without committing it
+      ansible.builtin.copy:
+        dest: "{{ app_dir }}/.env"
+        owner: "{{ app_user }}"
+        group: docker
+        mode: "0600"
+        content: |
+          POSTGRES_DB=training
+          POSTGRES_USER=training
+          POSTGRES_PASSWORD={{ app_db_password }}
+          DB_HOST=db
+          DB_PORT=5432
+          DB_NAME=training
+          DB_USER=training
+          DB_PASSWORD={{ app_db_password }}
+      no_log: true
+      notify: Reconcile the Compose application
+
+    - name: Check the rendered Compose model
+      ansible.builtin.command:
+        cmd: docker compose -p {{ compose_project }} config --quiet
+        chdir: "{{ app_dir }}"
+      become_user: "{{ app_user }}"
+      changed_when: false
+
+    - name: Flush application handler before checking services
+      ansible.builtin.meta: flush_handlers
+
+    - name: Check Compose service status
+      ansible.builtin.command:
+        cmd: docker compose -p {{ compose_project }} ps
+        chdir: "{{ app_dir }}"
+      become_user: "{{ app_user }}"
+      register: compose_status
+      changed_when: false
+      failed_when: "'api' not in compose_status.stdout or 'db' not in compose_status.stdout"
+
+  handlers:
+    - name: Reconcile the Compose application
+      ansible.builtin.command:
+        cmd: docker compose -p {{ compose_project }} up --detach --build
+        chdir: "{{ app_dir }}"
+      become_user: "{{ app_user }}"
